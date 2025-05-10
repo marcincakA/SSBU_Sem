@@ -79,15 +79,19 @@ try:
     for i, col in enumerate(df.columns):
         print(f"Column {i}: '{col}'")
 
-    # Rename columns at indices 2 and 4
+    # Rename columns at indices 1, 2, 3 and 4 to "validovany_vysledok", "cas_validacie", "prijem_vzorky" and "cas_prijmu"
     # Get the current column names at those indices
     if len(df.columns) > 4:  # Ensure columns exist
+        col_index_1 = df.columns[1]  # This is the column we just removed
         col_index_2 = df.columns[2]
+        col_index_3 = df.columns[3]
         col_index_4 = df.columns[4]
         
         # Create a mapping for renaming
         rename_mapping = {
-            col_index_2: 'cas_validacie',  # Rename column at index 2 to "cas_validacie"
+            col_index_1: 'validovany_vysledok',  # Rename column at index 1 to "validovany_vysledok"
+            col_index_2: 'cas_validacie',
+            col_index_3: 'prijem_vzorky',  # Rename column at index 2 to "cas_validacie"
             col_index_4: 'cas_prijmu'      # Rename column at index 4 to "cas_prijmu"
         }
         

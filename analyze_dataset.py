@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 
 # Load the dataset
-file_path = Path("Info/SSBU25_dataset.xls")
+file_path = Path("SSBU25_dataset_modified.xlsx")
 print(f"Loading dataset from {file_path.absolute()}")
 
 try:
@@ -45,7 +45,19 @@ try:
         'Percentage (%)': missing_percent
     })
     
-    print(missing_data[missing_data['Missing Values'] > 0].sort_values('Missing Values', ascending=False))
+     # Print missing values summary
+    missing_summary = missing_data[missing_data['Missing Values'] > 0].sort_values('Missing Values', ascending=False)
+    print("Summary of columns with missing values:")
+    print(missing_summary)
+    
+    # Print row indices for missing values in each column
+    print("\nRow indices with missing values by column:")
+    print("-" * 50)
+    for col in missing_summary.index:
+        missing_rows = df[df[col].isnull()].index.tolist()
+        print(f"Column '{col}': {missing_rows}")
+    
+
     
     # Basic statistics for numeric columns
     print("\n" + "="*50)
