@@ -9,7 +9,7 @@ from datetime import datetime
 
 # Input and output file paths
 input_file = Path("Info/SSBU25_dataset.xls")
-output_file = Path("SSBU25_dataset_modified.xlsx")
+output_file = Path("SSBU25_dataset_modified_new.xlsx")
 
 print(f"Loading dataset from {input_file.absolute()}")
 
@@ -349,6 +349,59 @@ try:
     print("\nFinal columns:")
     for i, col in enumerate(df.columns):
         print(f"Column {i}: '{col}'")
+    
+    # Find and remove rows with blank values in validovany vysledok column
+    validovany_col = None
+    for col in df.columns:
+        if 'validovany' in str(col).lower() and 'vysledok' in str(col).lower():
+            validovany_col = col
+            break
+    
+    if validovany_col:
+        # Count rows before removal
+        initial_rows = len(df)
+        
+        # Remove rows where validovany vysledok is blank (empty string, NaN, or None)
+        df = df[df[validovany_col].notna() & (df[validovany_col] != '')]
+        
+        # Count removed rows
+        removed_rows = initial_rows - len(df)
+        print(f"\nRemoved {removed_rows} rows with blank values in '{validovany_col}' column")
+    else:
+        print("\nCould not find 'validovany vysledok' column")
+    
+    # Find and remove rows with blank values in diagnoza column
+    diagnoza_col = None
+    for col in df.columns:
+        if 'diagnoza' in str(col).lower() or 'mkch' in str(col).lower():
+            diagnoza_col = col
+            break
+    
+    if diagnoza_col:
+        initial_rows = len(df)
+        df = df[df[diagnoza_col].notna() & (df[diagnoza_col] != '')]
+        removed_rows = initial_rows - len(df)
+        print(f"Removed {removed_rows} rows with blank values in '{diagnoza_col}' column")
+    else:
+        print("Could not find diagnoza column")
+    
+    # Find and remove rows with blank values in any HFE column
+    hfe_columns = []
+    for col in df.columns:
+        if 'hfe' in str(col).lower():
+            hfe_columns.append(col)
+    
+    if hfe_columns:
+        initial_rows = len(df)
+        
+        # Remove rows where any HFE column is blank
+        for hfe_col in hfe_columns:
+            df = df[df[hfe_col].notna() & (df[hfe_col] != '')]
+        
+        removed_rows = initial_rows - len(df)
+        print(f"Removed {removed_rows} rows with blank values in HFE columns: {', '.join(hfe_columns)}")
+    else:
+        print("Could not find any HFE columns")
     
     # Save to new file with string preservation for ID column
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:

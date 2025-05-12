@@ -3,10 +3,17 @@
 
 import pandas as pd
 import numpy as np
+import argparse
 from pathlib import Path
 
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Analyze SSBU25 dataset")
+parser.add_argument("--path", "-p", type=str, help="Path to the dataset file")
+args = parser.parse_args()
+
 # Load the dataset
-file_path = Path("Info/SSBU25_dataset.xls")
+default_path = "SSBU25_dataset_modified_new.xlsx"
+file_path = Path(args.path) if args.path else Path(default_path)
 print(f"Loading dataset from {file_path.absolute()}")
 
 try:
