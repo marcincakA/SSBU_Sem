@@ -3,4 +3,8 @@ numpy==1.24.3
 matplotlib==3.7.2
 seaborn==0.12.2
 openpyxl==3.1.2
-xlrd==2.0.1 
+xlrd==2.0.1
+scipy==1.10.1
+shiny==0.6.0
+shinyswatch==0.4.1
+uvicorn==0.24.0 
