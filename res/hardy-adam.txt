@@ -1,0 +1,95 @@
+Loading dataset from /Users/sammy/fun/SSBU_Sem/src/../res/SSBU25_dataset_adam.xlsx
+
+Found 3 HFE mutation columns for analysis:
+- HFE C187G (H63D)
+[HFE]
+- HFE A193T (S65C)
+[HFE]
+- HFE G845A (C282Y)
+[HFE]
+
+--------------------------------------------------
+Analyzing HFE H63D
+--------------------------------------------------
+
+Genotype Distribution:
+HFE C187G (H63D)\n[HFE]
+normal         1214
+heterozygot     420
+mutant           32
+Name: count, dtype: int64
+
+Hardy-Weinberg Equilibrium Analysis:
+Total individuals: 1666
+Normal allele frequency (p): 0.8547
+Mutant allele frequency (q): 0.1453
+Sum (p + q): 1.0000 (should be close to 1.0)
+
+Observed vs. Expected Counts:
+Normal (wildtype): 1214.0 observed vs 1217.2 expected
+Heterozygote: 420.0 observed vs 413.7 expected
+Mutant (homozygote): 32.0 observed vs 35.2 expected
+
+Statistical Test:
+Chi-square: 0.3870
+p-value: 0.8241
+Degrees of freedom: 1
+
+In Hardy-Weinberg equilibrium: Yes
+
+--------------------------------------------------
+Analyzing HFE S65C
+--------------------------------------------------
+
+Genotype Distribution:
+HFE A193T (S65C)\n[HFE]
+normal         1617
+heterozygot      49
+Name: count, dtype: int64
+
+Hardy-Weinberg Equilibrium Analysis:
+Total individuals: 1666
+Normal allele frequency (p): 0.9853
+Mutant allele frequency (q): 0.0147
+Sum (p + q): 1.0000 (should be close to 1.0)
+
+Observed vs. Expected Counts:
+Normal (wildtype): 1617.0 observed vs 1617.4 expected
+Heterozygote: 49.0 observed vs 48.3 expected
+Mutant (homozygote): 0.0 observed vs 0.4 expected
+
+Statistical Test:
+Chi-square: 0.3711
+p-value: 0.8306
+Degrees of freedom: 1
+
+In Hardy-Weinberg equilibrium: Yes
+
+--------------------------------------------------
+Analyzing HFE C282Y
+--------------------------------------------------
+
+Genotype Distribution:
+HFE G845A (C282Y)\n[HFE]
+normal         1516
+heterozygot     134
+mutant           16
+Name: count, dtype: int64
+
+Hardy-Weinberg Equilibrium Analysis:
+Total individuals: 1666
+Normal allele frequency (p): 0.9502
+Mutant allele frequency (q): 0.0498
+Sum (p + q): 1.0000 (should be close to 1.0)
+
+Observed vs. Expected Counts:
+Normal (wildtype): 1516.0 observed vs 1504.1 expected
+Heterozygote: 134.0 observed vs 157.7 expected
+Mutant (homozygote): 16.0 observed vs 4.1 expected
+
+Statistical Test:
+Chi-square: 37.7084
+p-value: 0.0000
+Degrees of freedom: 1
+
+In Hardy-Weinberg equilibrium: No

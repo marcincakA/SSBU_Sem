@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 
 import pandas as pd
@@ -5,9 +6,11 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 import re
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import numbers
 
 INPUT_FILE = Path("../res/SSBU25_dataset.xlsx")
-OUTPUT_FILE = Path("../res/SSBU25_dataset_cleaned.xlsx")
+OUTPUT_FILE = Path("../res/SSBU25_dataset_samuel.xlsx")
 
 def load_dataset(path):
     return pd.read_excel(path)
@@ -20,13 +23,40 @@ def rename_columns(df):
     if len(df.columns) > 4:
         col_map[df.columns[2]] = "cas_validacie"
         col_map[df.columns[4]] = "cas_prijmu"
-    df = df.rename(columns=col_map)
+    return df.rename(columns=col_map)
+
+def restore_year_prefix(df, id_col, date_col):
+    def fix(row):
+        raw_id = str(row[id_col]).strip()
+        raw_id = re.sub(r'\.0$', '', raw_id)
+        raw_id = raw_id.replace('.0', '')
+
+        if re.fullmatch(r'\d{10}', raw_id):
+            return raw_id
+        if re.fullmatch(r'\d{8}', raw_id) and pd.notna(row[date_col]):
+            try:
+                date = pd.to_datetime(row[date_col], dayfirst=True)
+                prefix = str(date.year)[-2:]
+                return f"{prefix}{raw_id}"
+            except:
+                return raw_id
+        return raw_id
+    df[id_col] = df.apply(fix, axis=1)
     return df
 
 def fix_id_format(df, id_col, old_format=False):
-    df[id_col] = df[id_col].astype(str).replace(['nan', '<NA>'], None)
-    df.loc[df[id_col].notna(), id_col] = df.loc[df[id_col].notna(), id_col].str.zfill(10 if not old_format else 9)
+    def clean(val):
+        if pd.isna(val):
+            return None
+        val = str(val).strip()
+        val = re.sub(r'\.0$', '', val)
+        if re.fullmatch(r'\d{10}', val):
+            return val  # already valid
+        return val.zfill(10 if not old_format else 9)
+
+    df[id_col] = df[id_col].apply(clean)
     return df
+
 
 def find_reception_date_column(df):
     for col in df.columns:
@@ -38,7 +68,7 @@ def extract_date_prefix(date_val):
     if pd.isna(date_val):
         return None
     try:
-        dt = pd.to_datetime(date_val)
+        dt = pd.to_datetime(date_val, dayfirst=True)
         return f"{str(dt.year)[-2:]}{dt.month:02d}{dt.day:02d}"
     except:
         return None
@@ -59,10 +89,17 @@ def reconstruct_missing_ids(df, id_col, date_col, time_col):
     return df
 
 def clean_rows(df, required_cols):
-    initial = len(df)
     for col in required_cols:
         df = df[df[col].notna() & (df[col] != '')]
     return df
+
+def save_with_text_column(df, output_path, text_column_index=0):
+    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+        worksheet = writer.sheets['Sheet1']
+        col_letter = get_column_letter(text_column_index + 1)
+        for cell in worksheet[col_letter]:
+            cell.number_format = numbers.FORMAT_TEXT
 
 def main():
     df = load_dataset(INPUT_FILE)
@@ -71,19 +108,20 @@ def main():
 
     df = drop_unwanted_columns(df)
     df = rename_columns(df)
+    date_col = find_reception_date_column(df)
 
-    # Detect old ID format
+    df = restore_year_prefix(df, id_col, date_col)
+
     id_lengths = df[id_col].dropna().astype(str).map(len)
     old_format = id_lengths.max() <= 9
 
     df = fix_id_format(df, id_col, old_format)
-    date_col = find_reception_date_column(df)
     df = reconstruct_missing_ids(df, id_col, date_col, "cas_prijmu")
 
     required_cols = ["validovany vysledok", "diagnoza mkch-10"] + [col for col in df.columns if "hfe" in col.lower()]
     df = clean_rows(df, required_cols)
 
-    df.to_excel(OUTPUT_FILE, index=False)
+    save_with_text_column(df, OUTPUT_FILE)
     print(f"💾 Cleaned dataset saved to {OUTPUT_FILE.absolute()}")
 
 if __name__ == "__main__":
