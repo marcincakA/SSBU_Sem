@@ -578,19 +578,33 @@ def analyze_diagnosis_associations(df, hfe_columns):
     df['Has_K759'] = df[diagnoza_col].apply(lambda x: 1 if str(x).startswith('K75.9') else 0)
     
     # Calculate prevalence in patients with and without mutations
-    k760_in_mutation = df[df['Any_HFE_Mutation'] == 'Mutation Present']['Has_K760'].mean() * 100
-    k760_in_no_mutation = df[df['Any_HFE_Mutation'] == 'No Mutation']['Has_K760'].mean() * 100
+    mutation_present = df['Any_HFE_Mutation'] == 'Mutation Present'
+    no_mutation = df['Any_HFE_Mutation'] == 'No Mutation'
     
-    k759_in_mutation = df[df['Any_HFE_Mutation'] == 'Mutation Present']['Has_K759'].mean() * 100
-    k759_in_no_mutation = df[df['Any_HFE_Mutation'] == 'No Mutation']['Has_K759'].mean() * 100
+    # Check for division by zero
+    if mutation_present.sum() > 0:
+        k760_in_mutation = df[mutation_present]['Has_K760'].mean() * 100
+        k759_in_mutation = df[mutation_present]['Has_K759'].mean() * 100
+        results.append(f"\nK76.0 (Fatty liver) prevalence:")
+        results.append(f"- In patients with HFE mutations: {k760_in_mutation:.2f}%")
+        results.append(f"\nK75.9 (Inflammatory liver disease) prevalence:")
+        results.append(f"- In patients with HFE mutations: {k759_in_mutation:.2f}%")
+    else:
+        results.append("\nNo patients with HFE mutations found for prevalence calculation")
     
-    results.append(f"\nK76.0 (Fatty liver) prevalence:")
-    results.append(f"- In patients with HFE mutations: {k760_in_mutation:.2f}%")
-    results.append(f"- In patients without HFE mutations: {k760_in_no_mutation:.2f}%")
-    
-    results.append(f"\nK75.9 (Inflammatory liver disease) prevalence:")
-    results.append(f"- In patients with HFE mutations: {k759_in_mutation:.2f}%")
-    results.append(f"- In patients without HFE mutations: {k759_in_no_mutation:.2f}%")
+    if no_mutation.sum() > 0:
+        k760_in_no_mutation = df[no_mutation]['Has_K760'].mean() * 100
+        k759_in_no_mutation = df[no_mutation]['Has_K759'].mean() * 100
+        if mutation_present.sum() > 0:  # Only add this if we already have mutation data
+            results.append(f"- In patients without HFE mutations: {k760_in_no_mutation:.2f}%")
+            results.append(f"- In patients without HFE mutations: {k759_in_no_mutation:.2f}%")
+        else:
+            results.append(f"\nK76.0 (Fatty liver) prevalence:")
+            results.append(f"- In patients without HFE mutations: {k760_in_no_mutation:.2f}%")
+            results.append(f"\nK75.9 (Inflammatory liver disease) prevalence:")
+            results.append(f"- In patients without HFE mutations: {k759_in_no_mutation:.2f}%")
+    else:
+        results.append("\nNo patients without HFE mutations found for prevalence calculation")
     
     # Create a 2x2 contingency table for each specific disease
     k760_table = pd.crosstab(df['Any_HFE_Mutation'], df['Has_K760'])
@@ -598,24 +612,32 @@ def analyze_diagnosis_associations(df, hfe_columns):
     
     # Perform chi-square tests on the 2x2 tables if possible
     try:
-        k760_chi2, k760_p, k760_dof, k760_expected = chi2_contingency(k760_table)
-        results.append(f"\nChi-Square Test for K76.0: chi2={k760_chi2:.2f}, p={k760_p:.4f}")
-        if k760_p < 0.05:
-            results.append("There is a significant association between HFE mutations and K76.0 (Fatty liver).")
+        # Check if table is valid for chi-square test (no zeros)
+        if k760_table.shape == (2, 2) and not (k760_table == 0).any().any():
+            k760_chi2, k760_p, k760_dof, k760_expected = chi2_contingency(k760_table)
+            results.append(f"\nChi-Square Test for K76.0: chi2={k760_chi2:.2f}, p={k760_p:.4f}")
+            if k760_p < 0.05:
+                results.append("There is a significant association between HFE mutations and K76.0 (Fatty liver).")
+            else:
+                results.append("No significant association found between HFE mutations and K76.0 (Fatty liver).")
         else:
-            results.append("No significant association found between HFE mutations and K76.0 (Fatty liver).")
-    except:
-        results.append("Could not perform chi-square test for K76.0 - may have insufficient data.")
+            results.append("\nCould not perform chi-square test for K76.0 - insufficient or unbalanced data.")
+    except Exception as e:
+        results.append(f"\nError in chi-square test for K76.0: {str(e)}")
     
     try:
-        k759_chi2, k759_p, k759_dof, k759_expected = chi2_contingency(k759_table)
-        results.append(f"\nChi-Square Test for K75.9: chi2={k759_chi2:.2f}, p={k759_p:.4f}")
-        if k759_p < 0.05:
-            results.append("There is a significant association between HFE mutations and K75.9 (Inflammatory liver disease).")
+        # Check if table is valid for chi-square test (no zeros)
+        if k759_table.shape == (2, 2) and not (k759_table == 0).any().any():
+            k759_chi2, k759_p, k759_dof, k759_expected = chi2_contingency(k759_table)
+            results.append(f"\nChi-Square Test for K75.9: chi2={k759_chi2:.2f}, p={k759_p:.4f}")
+            if k759_p < 0.05:
+                results.append("There is a significant association between HFE mutations and K75.9 (Inflammatory liver disease).")
+            else:
+                results.append("No significant association found between HFE mutations and K75.9 (Inflammatory liver disease).")
         else:
-            results.append("No significant association found between HFE mutations and K75.9 (Inflammatory liver disease).")
-    except:
-        results.append("Could not perform chi-square test for K75.9 - may have insufficient data.")
+            results.append("\nCould not perform chi-square test for K75.9 - insufficient or unbalanced data.")
+    except Exception as e:
+        results.append(f"\nError in chi-square test for K75.9: {str(e)}")
     
     return df, results
 
@@ -630,6 +652,11 @@ def generate_genotype_distribution_plot(df, hfe_columns):
         plt.figure(figsize=(10, 6))
         genotype_counts = df[column].value_counts()
         total = len(df)
+        
+        # Skip if no data
+        if total == 0:
+            plt.close()
+            continue
         
         # Create bar chart
         ax = sns.barplot(x=genotype_counts.index, y=genotype_counts.values)
@@ -670,6 +697,11 @@ def generate_risk_distribution_plot(df):
     plt.figure(figsize=(10, 6))
     risk_counts = df['Risk_Category'].value_counts()
     total = len(df)
+    
+    # Skip if no data
+    if total == 0:
+        plt.close()
+        return None
     
     # Create bar chart
     ax = sns.barplot(x=risk_counts.index, y=risk_counts.values)
@@ -779,6 +811,26 @@ def calculate_hwe(df, mutation_column, column_name):
     mutant_count = genotype_counts.get('mutant', 0)
     
     total = normal_count + heterozygote_count + mutant_count
+    
+    # Check if total is zero to avoid division by zero
+    if total == 0:
+        return {
+            "Mutation": column_name,
+            "Total": 0,
+            "Normal (observed)": 0,
+            "Heterozygote (observed)": 0,
+            "Mutant (observed)": 0,
+            "Normal allele frequency (p)": 0,
+            "Mutant allele frequency (q)": 0,
+            "p + q": 0,
+            "Normal (expected)": 0,
+            "Heterozygote (expected)": 0,
+            "Mutant (expected)": 0,
+            "Chi-square": np.nan,
+            "p-value": np.nan,
+            "Degrees of freedom": 0,
+            "In Hardy-Weinberg equilibrium": "Cannot determine (no data)"
+        }
     
     # Calculate allele frequencies
     p = (2 * normal_count + heterozygote_count) / (2 * total)  # Normal allele frequency
