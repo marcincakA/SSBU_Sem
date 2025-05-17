@@ -35,18 +35,6 @@ def analyze_dataset(df):
     else:
         results.append("No missing values found")
     
-    # Numeric column analysis
-    results.append("\nNumeric Column Analysis:")
-    numeric_columns = df.select_dtypes(include=['number']).columns
-    if len(numeric_columns) > 0:
-        for col in numeric_columns:
-            if not df[col].empty:
-                min_val = df[col].min()
-                max_val = df[col].max()
-                results.append(f"{col}: Min = {min_val}, Max = {max_val}")
-    else:
-        results.append("No numeric columns found in the dataset")
-    
     # Find HFE columns
     hfe_columns = []
     for col in df.columns:
