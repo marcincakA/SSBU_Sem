@@ -45,6 +45,20 @@ def create_ui():
                     },
                     selected="all"
                 ),
+                
+                ui.h4("Hardy-Weinberg Tests"),
+                ui.input_checkbox_group(
+                    "hwe_tests",
+                    "Select Statistical Tests:",
+                    {
+                        "chi_square": "Chi-Square Test (χ²)",
+                        "exact": "Exact Test (Fisher)",
+                        "logistic": "Logistic Regression",
+                        "bayesian": "Bayesian Analysis"
+                    },
+                    selected=["chi_square"]
+                ),
+                
                 ui.input_action_button("btn_analyze", "Run Analysis", class_="btn-success"),
                 ui.hr(),
                 

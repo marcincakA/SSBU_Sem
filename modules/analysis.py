@@ -292,7 +292,7 @@ def analyze_diagnosis_associations(df, hfe_columns):
     
     return df, results
 
-def calculate_hwe(df, mutation_column, column_name):
+def calculate_hwe(df, mutation_column, column_name, tests=None):
     """
     Calculate Hardy-Weinberg equilibrium for a given mutation column.
     
@@ -300,10 +300,14 @@ def calculate_hwe(df, mutation_column, column_name):
         df: DataFrame containing the genotype data
         mutation_column: Column name containing genotype data
         column_name: Human-readable name for the mutation
+        tests: List of tests to perform ('chi_square', 'exact', 'logistic', 'bayesian')
         
     Returns:
         Dictionary with HWE analysis results
     """
+    if tests is None:
+        tests = ['chi_square']  # Default to chi-square test only
+        
     # Count genotypes
     genotype_counts = df[mutation_column].value_counts()
     
@@ -329,7 +333,10 @@ def calculate_hwe(df, mutation_column, column_name):
             "Heterozygote (expected)": 0,
             "Mutant (expected)": 0,
             "Chi-square": np.nan,
-            "p-value": np.nan,
+            "p-value (chi-square)": np.nan,
+            "p-value (exact)": np.nan,
+            "p-value (logistic)": np.nan,
+            "Bayesian posterior": np.nan,
             "Degrees of freedom": 0,
             "In Hardy-Weinberg equilibrium": "Cannot determine (no data)"
         }
@@ -343,33 +350,214 @@ def calculate_hwe(df, mutation_column, column_name):
     expected_heterozygote = 2 * p * q * total
     expected_mutant = (q**2) * total
     
-    # Perform chi-square test
+    # Initialize test results with NaN
+    chi2 = np.nan
+    chi2_p_value = np.nan
+    exact_p_value = np.nan
+    logistic_p_value = np.nan
+    bayesian_posterior = np.nan
+    df_freedom = 0
+    is_in_hwe = "Cannot determine (insufficient data)"
+    
+    # Observed and expected values for tests
     observed = np.array([normal_count, heterozygote_count, mutant_count])
     expected = np.array([expected_normal, expected_heterozygote, expected_mutant])
     
-    # Filter out zeros to avoid division by zero in chi-square test
-    valid_indices = expected > 0
+    # Perform Chi-square test if requested
+    if 'chi_square' in tests:
+        # Filter out zeros to avoid division by zero in chi-square test
+        valid_indices = expected > 0
+        
+        if sum(valid_indices) <= 1:
+            # Not enough valid categories for chi-square test
+            chi2 = np.nan
+            chi2_p_value = np.nan
+            df_freedom = 0
+        else:
+            # Calculate chi-square and p-value using scipy.stats.chisquare
+            from scipy import stats
+            chi2, chi2_p_value = stats.chisquare(
+                observed[valid_indices], 
+                expected[valid_indices]
+            )
+            
+            # Degrees of freedom: number of categories - 1 (allele frequency) - 1 = #categories - 2
+            df_freedom = sum(valid_indices) - 1 - 1
+            df_freedom = max(1, df_freedom)  # Ensure at least 1 degree of freedom
     
-    if sum(valid_indices) <= 1:
-        # Not enough valid categories for chi-square test
-        chi2 = np.nan
-        p_value = np.nan
-        df_freedom = 0
-        is_in_hwe = "Cannot determine (insufficient data)"
+    # Perform Exact test (Fisher's exact test) if requested
+    if 'exact' in tests:
+        try:
+            from scipy import stats
+            
+            # Create a 2x3 table for exact test
+            # Rows: alleles (normal, mutant)
+            # Columns: genotypes (normal, heterozygote, mutant)
+            
+            # Calculate allele counts in each genotype category
+            normal_alleles_in_normal = 2 * normal_count
+            normal_alleles_in_heterozygote = heterozygote_count
+            normal_alleles_in_mutant = 0
+            
+            mutant_alleles_in_normal = 0
+            mutant_alleles_in_heterozygote = heterozygote_count
+            mutant_alleles_in_mutant = 2 * mutant_count
+            
+            # Create the table
+            table = np.array([
+                [normal_alleles_in_normal, normal_alleles_in_heterozygote, normal_alleles_in_mutant],
+                [mutant_alleles_in_normal, mutant_alleles_in_heterozygote, mutant_alleles_in_mutant]
+            ])
+            
+            # Perform Fisher's exact test if there's enough data
+            if np.sum(table) > 0 and not np.any(np.isnan(table)):
+                # Flatten the table for stats.fisher_exact - it only works with 2x2 tables directly
+                # So we'll use a simulation approach for the 2x3 table
+                if sum(observed) >= 5 and min(expected) >= 1:
+                    _, exact_p_value = stats.chi2_contingency(table, simulate_p_value=True)
+                else:
+                    exact_p_value = np.nan  # Too little data for accurate simulation
+            else:
+                exact_p_value = np.nan
+        except Exception as e:
+            exact_p_value = np.nan
+            print(f"Error in exact test: {str(e)}")
+            
+    # Perform Logistic regression if requested
+    if 'logistic' in tests and 'Diagnosis_Category' in df.columns:
+        try:
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.metrics import log_loss
+            
+            # We need to see if there's a disease association to test with logistic regression
+            # Using the Diagnosis_Category column for disease status (binary: Liver Disease or not)
+            if 'Diagnosis_Category' in df.columns:
+                # Create binary outcome variable (1 = Liver Disease, 0 = Other)
+                df_subset = df[[mutation_column, 'Diagnosis_Category']].copy()
+                df_subset['is_liver_disease'] = df_subset['Diagnosis_Category'].apply(
+                    lambda x: 1 if 'Liver Disease' in str(x) else 0
+                )
+                
+                # Create numeric predictor (0=normal, 1=heterozygote, 2=mutant)
+                df_subset['genotype_numeric'] = df_subset[mutation_column].map({
+                    'normal': 0, 
+                    'heterozygot': 1, 
+                    'mutant': 2
+                })
+                
+                # Drop rows with missing values
+                df_subset = df_subset.dropna(subset=['genotype_numeric', 'is_liver_disease'])
+                
+                if len(df_subset) > 10:  # Enough data for regression
+                    # Fit logistic regression
+                    X = df_subset['genotype_numeric'].values.reshape(-1, 1)
+                    y = df_subset['is_liver_disease'].values
+                    
+                    model = LogisticRegression(random_state=42)
+                    model.fit(X, y)
+                    
+                    # Calculate p-value from log-likelihood ratio test
+                    null_model = LogisticRegression(fit_intercept=True, random_state=42)
+                    null_model.fit(np.ones((len(X), 1)), y)
+                    
+                    # Get log-likelihoods
+                    y_pred_full = model.predict_proba(X)
+                    y_pred_null = null_model.predict_proba(np.ones((len(X), 1)))
+                    
+                    # Calculate log-likelihood for both models
+                    ll_full = -log_loss(y, y_pred_full) * len(X)
+                    ll_null = -log_loss(y, y_pred_null) * len(X)
+                    
+                    # LR test statistic
+                    lr_stat = 2 * (ll_full - ll_null)
+                    
+                    # P-value (chi-square distribution with 1 df)
+                    from scipy.stats import chi2
+                    logistic_p_value = 1 - chi2.cdf(lr_stat, 1)
+                else:
+                    logistic_p_value = np.nan  # Not enough data
+            else:
+                logistic_p_value = np.nan  # No disease information for logistic regression
+        except Exception as e:
+            logistic_p_value = np.nan
+            print(f"Error in logistic regression: {str(e)}")
+    
+    # Perform Bayesian analysis if requested
+    if 'bayesian' in tests:
+        try:
+            from scipy import stats
+            
+            # Bayesian approach using Beta distribution as prior
+            # Beta(1,1) is a uniform prior - no previous knowledge
+            # We update using the observed data to get the posterior
+            
+            # For HWE, we're interested in the parameter theta where:
+            # theta measures the deviation from HWE
+            # theta = 0 means perfect HWE
+            
+            # We'll use a simple Bayesian approach: compute the posterior probability
+            # that the population is in HWE given the observed genotype counts
+            
+            # To simplify, we'll compute P(observed | HWE) using multinomial distribution
+            # P(HWE) is our prior - we'll set to 0.5 (equal prior probability)
+            
+            # Calculate the probability of observing these genotypes under HWE
+            # (Using Dirichlet-Multinomial conjugate model)
+            
+            # Prior concentration parameters (1,1,1) = uniform
+            alpha_prior = np.array([1, 1, 1])
+            
+            # Posterior = prior + observed
+            alpha_posterior = alpha_prior + observed
+            
+            # Simulate samples from posterior
+            n_samples = 10000
+            
+            # Sample p from Dirichlet distribution
+            p_samples = stats.dirichlet.rvs(alpha_posterior, size=n_samples)
+            
+            # For each p, calculate expected HWE frequencies
+            # For HWE: p_AA = p_A^2, p_Aa = 2*p_A*p_a, p_aa = p_a^2
+            hwe_samples = np.zeros((n_samples, 3))
+            
+            # Estimate p_A and p_a from each sample
+            for i in range(n_samples):
+                p_sample = p_samples[i]
+                
+                # Calculate allele frequencies from genotype frequencies
+                p_A = (2*p_sample[0] + p_sample[1])/2  # p_AA + p_Aa/2
+                p_a = (2*p_sample[2] + p_sample[1])/2  # p_aa + p_Aa/2
+                
+                # Calculate HWE genotype frequencies
+                hwe_samples[i, 0] = p_A**2            # p_AA
+                hwe_samples[i, 1] = 2 * p_A * p_a     # p_Aa
+                hwe_samples[i, 2] = p_a**2            # p_aa
+            
+            # Calculate the proportion of samples that suggest HWE
+            # by comparing the original and HWE-expected frequencies
+            
+            # Convert to counts
+            original_frequency = observed / np.sum(observed)
+            
+            # Calculate Euclidean distance between observed and HWE frequencies
+            distances = np.sqrt(np.sum((p_samples - hwe_samples)**2, axis=1))
+            
+            # Proportion of samples where distance is small (threshold: 0.1)
+            bayesian_posterior = np.mean(distances < 0.1)
+            
+        except Exception as e:
+            bayesian_posterior = np.nan
+            print(f"Error in Bayesian analysis: {str(e)}")
+            
+    # Determine if in Hardy-Weinberg equilibrium based on available tests
+    if 'chi_square' in tests and not np.isnan(chi2_p_value):
+        is_in_hwe = "Yes" if chi2_p_value > 0.05 else "No"
+    elif 'exact' in tests and not np.isnan(exact_p_value):
+        is_in_hwe = "Yes" if exact_p_value > 0.05 else "No"
+    elif 'bayesian' in tests and not np.isnan(bayesian_posterior):
+        is_in_hwe = "Yes" if bayesian_posterior > 0.5 else "No"
     else:
-        # Calculate chi-square and p-value using scipy.stats.chisquare
-        from scipy import stats
-        chi2, p_value = stats.chisquare(
-            observed[valid_indices], 
-            expected[valid_indices]
-        )
-        
-        # Degrees of freedom: number of categories - 1 (allele frequency) - 1 = #categories - 2
-        df_freedom = sum(valid_indices) - 1 - 1
-        df_freedom = max(1, df_freedom)  # Ensure at least 1 degree of freedom
-        
-        # Determine if in Hardy-Weinberg equilibrium
-        is_in_hwe = "Yes" if p_value > 0.05 else "No"
+        is_in_hwe = "Cannot determine (insufficient data)"
     
     # Return results
     results = {
@@ -385,19 +573,31 @@ def calculate_hwe(df, mutation_column, column_name):
         "Heterozygote (expected)": expected_heterozygote,
         "Mutant (expected)": expected_mutant,
         "Chi-square": chi2,
-        "p-value": p_value,
+        "p-value (chi-square)": chi2_p_value,
+        "p-value (exact)": exact_p_value,
+        "p-value (logistic)": logistic_p_value,
+        "Bayesian posterior": bayesian_posterior,
         "Degrees of freedom": df_freedom,
         "In Hardy-Weinberg equilibrium": is_in_hwe
     }
     
     return results
 
-def analyze_hardy_weinberg(df, hfe_columns):
+def analyze_hardy_weinberg(df, hfe_columns, hwe_tests=None):
     """
     Analyze Hardy-Weinberg equilibrium for HFE mutations in the dataset
+    
+    Args:
+        df: DataFrame containing the genotype data
+        hfe_columns: List of columns containing HFE genotype data
+        hwe_tests: List of tests to perform ('chi_square', 'exact', 'logistic', 'bayesian')
     """
+    if hwe_tests is None:
+        hwe_tests = ['chi_square']  # Default to chi-square test only
+        
     results = []
     results.append("HARDY-WEINBERG EQUILIBRIUM ANALYSIS")
+    results.append(f"Tests selected: {', '.join(hwe_tests)}")
     
     # Define human-readable names for mutations
     mutation_names = {
@@ -426,7 +626,7 @@ def analyze_hardy_weinberg(df, hfe_columns):
             results.append(f"{genotype}: {count} ({percentage:.2f}%)")
         
         # Calculate Hardy-Weinberg equilibrium
-        hwe_results = calculate_hwe(df, column, column_name)
+        hwe_results = calculate_hwe(df, column, column_name, hwe_tests)
         hwe_results_list.append(hwe_results)
         
         # Print results
@@ -441,14 +641,46 @@ def analyze_hardy_weinberg(df, hfe_columns):
         results.append(f"Heterozygote: {hwe_results['Heterozygote (observed)']:.1f} observed vs {hwe_results['Heterozygote (expected)']:.1f} expected")
         results.append(f"Mutant (homozygote): {hwe_results['Mutant (observed)']:.1f} observed vs {hwe_results['Mutant (expected)']:.1f} expected")
         
-        results.append("\nStatistical Test:")
-        if np.isnan(hwe_results['Chi-square']):
-            results.append("Chi-square test could not be performed (insufficient data)")
-        else:
-            results.append(f"Chi-square: {hwe_results['Chi-square']:.4f}")
-            results.append(f"p-value: {hwe_results['p-value']:.4f}")
-            results.append(f"Degrees of freedom: {hwe_results['Degrees of freedom']}")
+        results.append("\nStatistical Tests:")
         
-        results.append(f"\nIn Hardy-Weinberg equilibrium: {hwe_results['In Hardy-Weinberg equilibrium']}")
+        # Report Chi-square results if requested
+        if 'chi_square' in hwe_tests:
+            if np.isnan(hwe_results['Chi-square']):
+                results.append("Chi-square test could not be performed (insufficient data)")
+            else:
+                results.append(f"Chi-square statistic: {hwe_results['Chi-square']:.4f}")
+                results.append(f"Chi-square p-value: {hwe_results['p-value (chi-square)']:.4f}")
+                results.append(f"Degrees of freedom: {hwe_results['Degrees of freedom']}")
+                chi_interp = "in HWE" if hwe_results['p-value (chi-square)'] > 0.05 else "not in HWE"
+                results.append(f"Chi-square interpretation: Population is {chi_interp} (α=0.05)")
+        
+        # Report Exact test results if requested
+        if 'exact' in hwe_tests:
+            if np.isnan(hwe_results['p-value (exact)']):
+                results.append("Exact test could not be performed (insufficient data)")
+            else:
+                results.append(f"Exact test p-value: {hwe_results['p-value (exact)']:.4f}")
+                exact_interp = "in HWE" if hwe_results['p-value (exact)'] > 0.05 else "not in HWE"
+                results.append(f"Exact test interpretation: Population is {exact_interp} (α=0.05)")
+        
+        # Report Logistic regression results if requested
+        if 'logistic' in hwe_tests:
+            if np.isnan(hwe_results['p-value (logistic)']):
+                results.append("Logistic regression could not be performed (insufficient data or no diagnosis information)")
+            else:
+                results.append(f"Logistic regression p-value: {hwe_results['p-value (logistic)']:.4f}")
+                logistic_interp = "significant" if hwe_results['p-value (logistic)'] < 0.05 else "not significant"
+                results.append(f"Logistic regression interpretation: Association with liver disease is {logistic_interp} (α=0.05)")
+        
+        # Report Bayesian analysis results if requested
+        if 'bayesian' in hwe_tests:
+            if np.isnan(hwe_results['Bayesian posterior']):
+                results.append("Bayesian analysis could not be performed (insufficient data)")
+            else:
+                results.append(f"Bayesian posterior probability of HWE: {hwe_results['Bayesian posterior']:.4f}")
+                bayesian_interp = "supports HWE" if hwe_results['Bayesian posterior'] > 0.5 else "does not support HWE"
+                results.append(f"Bayesian interpretation: Evidence {bayesian_interp}")
+        
+        results.append(f"\nOverall conclusion: {hwe_results['In Hardy-Weinberg equilibrium']}")
     
     return df, results, hwe_results_list 

@@ -156,7 +156,11 @@ def server(input, output, session):
                 results.extend(diag_results)
             
             if analysis_type in ["hardy_weinberg", "all"]:
-                df, hwe_results, hwe_results_list = analyze_hardy_weinberg(df, hfe_columns)
+                # Get selected Hardy-Weinberg tests
+                selected_hwe_tests = input.hwe_tests() if input.hwe_tests() else ["chi_square"]
+                
+                # Run Hardy-Weinberg analysis with selected tests
+                df, hwe_results, hwe_results_list = analyze_hardy_weinberg(df, hfe_columns, selected_hwe_tests)
                 results.extend(hwe_results)
                 plots_hardy_weinberg.set(generate_hardy_weinberg_plots(hwe_results_list))
             
