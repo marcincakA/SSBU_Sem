@@ -7,6 +7,11 @@ import os
 import tempfile
 from openpyxl.styles import Font
 from pathlib import Path
+import io
+import base64
+import docx
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # Import Shiny for Python
 from shiny import App, ui, render, reactive
@@ -654,6 +659,128 @@ def server(input, output, session):
         
         # Return the path as a string
         return temp_path
+
+    def generate_word_report(analysis_results, df, plots=None):
+        """
+        Generate a Word document containing the analysis results and plots.
+        
+        Args:
+            analysis_results: List of text results
+            df: DataFrame with the analyzed data
+            plots: Optional dictionary of plots to include
+        
+        Returns:
+            BytesIO object containing the Word document
+        """
+        # Create a new Word document
+        doc = docx.Document()
+        
+        # Set the title
+        title = doc.add_heading('HFE Mutation Analysis Report', level=0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Add a timestamp
+        import datetime
+        timestamp = doc.add_paragraph(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        timestamp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Add dataset summary
+        doc.add_heading('Dataset Summary', level=1)
+        doc.add_paragraph(f"Total Rows: {len(df)}")
+        doc.add_paragraph(f"Total Columns: {len(df.columns)}")
+        
+        # Add results as paragraphs, handling sections properly
+        doc.add_heading('Analysis Results', level=1)
+        
+        current_section = None
+        for line in analysis_results:
+            # Check if this is a section header
+            if line.strip().isupper() or (line.strip() and line.strip()[0] == line.strip()[-1] == "="):
+                # Add as a section header (level 2)
+                current_section = line.strip().replace("=", "").strip()
+                doc.add_heading(current_section, level=2)
+            elif line.startswith('---') or not line.strip():
+                # Skip separators and blank lines
+                continue
+            elif line.strip().endswith(':') and len(line.strip()) < 50:
+                # Treat as a subsection
+                doc.add_heading(line.strip(), level=3)
+            else:
+                # Add as regular paragraph
+                doc.add_paragraph(line)
+        
+        # Add plots
+        if plots and any(plots):
+            doc.add_heading('Visualizations', level=1)
+            
+            # Process each plot type
+            for plot_type, plot_data in plots.items():
+                if plot_data and len(plot_data) > 0:
+                    # Add a heading for this plot type
+                    doc.add_heading(plot_type, level=2)
+                    
+                    for name, img_str in plot_data:
+                        doc.add_heading(name, level=3)
+                        # Save the image to a temporary file and add it to the document
+                        image_data = io.BytesIO(base64.b64decode(img_str))
+                        doc.add_picture(image_data, width=Inches(6))
+                        doc.add_paragraph()  # Add spacing
+        
+        # Save the document to a BytesIO object
+        docx_bytes = io.BytesIO()
+        doc.save(docx_bytes)
+        docx_bytes.seek(0)
+        
+        return docx_bytes
+
+    # Add Word document download button
+    @output
+    @render.ui
+    def word_download_button():
+        return ui.download_button(
+            "download_word", 
+            "Download Report as Word Document", 
+            class_="btn-info mt-2", 
+            disabled=not analysis_run()
+        )
+    
+    # Implement Word document download handler
+    @output
+    @render.download(filename="hfe_analysis_report.docx")
+    def download_word():
+        # Return None if no analysis has been run
+        if not analysis_run():
+            return None
+        
+        # Collect all plots to include in the document
+        plots_to_include = {
+            "Genotype Distribution": plots_genotype() if plots_genotype() else [],
+            "Genotypes by Age": plots_age() if plots_age() else [],
+            "Genotypes by Gender": plots_gender() if plots_gender() else [],
+            "Genotypes by Diagnosis and Gender": plots_diagnosis_gender() if plots_diagnosis_gender() else [],
+            "Risk Distribution": [(None, plot_risk())] if plot_risk() else [],
+            "Diagnosis Associations": [(None, plot_diagnosis())] if plot_diagnosis() else [],
+            "Liver Disease": [(None, plot_liver())] if plot_liver() else [],
+            "Hardy-Weinberg Equilibrium": plots_hardy_weinberg() if plots_hardy_weinberg() else [],
+            "Diagnosis Trends": trends_plots_data() if trends_plots_data() else []
+        }
+        
+        # Generate the Word document
+        try:
+            return generate_word_report(
+                analysis_results=analysis_results_text(), 
+                df=data(), 
+                plots=plots_to_include
+            )
+        except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
+            ui.notification_show(
+                f"Error generating Word document: {str(e)}", 
+                type="error", 
+                duration=None
+            )
+            return None
 
 # Create the Shiny app
 app = App(create_ui(), server)

@@ -78,6 +78,7 @@ def create_ui():
                 ui.hr(),
                 
                 ui.output_ui("data_download_button"),
+                ui.output_ui("word_download_button"),
             ),
             
             ui.navset_tab(
