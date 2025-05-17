@@ -192,10 +192,18 @@ def generate_hardy_weinberg_plots(hwe_results_list):
         
         # Add HWE status and p-value to the plot
         hwe_status = result["In Hardy-Weinberg equilibrium"]
-        p_value = result["p-value"]
         
-        if isinstance(p_value, float):
-            plt.figtext(0.5, 0.01, f"HWE Status: {hwe_status} (p = {p_value:.4f})", 
+        # Get p-value from the first available test
+        p_value = None
+        test_name = ""
+        for test_key in ["p-value (chi-square)", "p-value (exact)", "p-value (logistic)"]:
+            if test_key in result and not pd.isna(result[test_key]):
+                p_value = result[test_key]
+                test_name = test_key.replace("p-value ", "").strip("()")
+                break
+                
+        if p_value is not None and isinstance(p_value, float):
+            plt.figtext(0.5, 0.01, f"HWE Status: {hwe_status} ({test_name} p = {p_value:.4f})", 
                         ha="center", fontsize=12, bbox={"facecolor":"orange", "alpha":0.5, "pad":5})
         else:
             plt.figtext(0.5, 0.01, f"HWE Status: {hwe_status}", 

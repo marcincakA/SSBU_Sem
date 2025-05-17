@@ -33,7 +33,7 @@ def create_ui():
                 ui.hr(),
                 
                 ui.h3("Analysis Options"),
-                ui.input_radio_buttons(
+                ui.input_checkbox_group(
                     "analysis_type",
                     "Analysis Type",
                     {
@@ -41,14 +41,44 @@ def create_ui():
                         "hh_risk": "HH Risk Analysis",
                         "diagnosis": "Diagnosis Association Analysis",
                         "hardy_weinberg": "Hardy-Weinberg Equilibrium Analysis",
-                        "all": "Complete Analysis"
+                        "diagnosis_trends": "Diagnosis Trends Analysis"
                     },
-                    selected="all"
+                    selected=["basic"]
                 ),
+                
+                ui.h4("Hardy-Weinberg Tests"),
+                ui.input_checkbox_group(
+                    "hwe_tests",
+                    "Select Statistical Tests:",
+                    {
+                        "chi_square": "Chi-Square Test (χ²)",
+                        "exact": "Exact Test (Fisher)",
+                        "bayesian": "Bayesian Analysis"
+                    },
+                    selected=["chi_square"]
+                ),
+                
+                ui.div(
+                    {"id": "diagnosis_trends_options", "style": "margin-top: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px;"},
+                    ui.h4("Diagnosis Trends Options"),
+                    ui.input_text(
+                        "date_column",
+                        "Date Column for Trends Analysis",
+                        value="",
+                        placeholder="Enter column name exactly as it appears in the dataset"
+                    ),
+                    ui.input_switch(
+                        "auto_detect_date",
+                        "Auto-detect date column",
+                        value=True
+                    )
+                ),
+                
                 ui.input_action_button("btn_analyze", "Run Analysis", class_="btn-success"),
                 ui.hr(),
                 
                 ui.output_ui("data_download_button"),
+                ui.output_ui("word_download_button"),
             ),
             
             ui.navset_tab(
@@ -82,7 +112,15 @@ def create_ui():
                     ui.h3("Liver Disease by Risk Category"),
                     ui.output_ui("liver_disease_plot"),
                     ui.h3("Hardy-Weinberg Equilibrium"),
-                    ui.output_ui("hardy_weinberg_plots")
+                    ui.output_ui("hardy_weinberg_plots"),
+                    ui.h3("Diagnosis Trends"),
+                    ui.output_ui("diagnosis_trends_plots")
+                ),
+                ui.nav_panel("Diagnosis Trends",
+                    ui.h3("Diagnosis Trends Analysis"),
+                    ui.output_text_verbatim("diagnosis_trends_results"),
+                    ui.h3("Diagnosis Code Validation"),
+                    ui.output_text_verbatim("diagnosis_validation_results")
                 )
             )
         ),
