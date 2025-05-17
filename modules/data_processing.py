@@ -6,6 +6,26 @@ import numpy as np
 import re
 from datetime import datetime
 
+def clean_column_names(df):
+    """
+    Clean column names by removing trailing spaces and standardizing names.
+    
+    Args:
+        df: DataFrame with column names to clean
+        
+    Returns:
+        DataFrame with cleaned column names
+    """
+    # Create a mapping of old names to cleaned names
+    rename_mapping = {}
+    for col in df.columns:
+        # Remove trailing spaces
+        cleaned_col = col.rstrip() if isinstance(col, str) else col
+        rename_mapping[col] = cleaned_col
+    
+    # Apply the renaming
+    return df.rename(columns=rename_mapping)
+
 def clean_dataset(df, remove_blank_validovany=True, remove_blank_diagnoza=True, 
                  remove_blank_hfe=True, remove_second_column=True, 
                  min_age=0, max_age=250, filter_by_age=False):
@@ -16,6 +36,20 @@ def clean_dataset(df, remove_blank_validovany=True, remove_blank_diagnoza=True,
     results = []
     results.append("Starting dataset cleaning...")
     results.append(f"Initial rows: {len(df)}")
+    
+    # Clean column names by removing trailing spaces
+    original_cols = list(df.columns)
+    df = clean_column_names(df)
+    
+    # Check if any column names were changed
+    cleaned_cols = list(df.columns)
+    cleaned_count = sum(1 for i, col in enumerate(original_cols) if col != cleaned_cols[i])
+    
+    if cleaned_count > 0:
+        results.append(f"Cleaned {cleaned_count} column names by removing trailing spaces")
+        for i, (orig, cleaned) in enumerate(zip(original_cols, cleaned_cols)):
+            if orig != cleaned:
+                results.append(f"  Column {i}: '{orig}' → '{cleaned}'")
     
     # Find ID column (likely first column)
     if 'id' in df.columns:

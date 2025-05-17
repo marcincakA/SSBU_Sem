@@ -12,7 +12,7 @@ from pathlib import Path
 from shiny import App, ui, render, reactive
 
 # Import modules
-from modules.data_processing import clean_dataset, analyze_age_column, find_hfe_columns
+from modules.data_processing import clean_dataset, analyze_age_column, find_hfe_columns, clean_column_names
 from modules.analysis import (
     analyze_dataset, analyze_hh_risk, analyze_diagnosis_associations, 
     analyze_hardy_weinberg
@@ -24,6 +24,7 @@ from modules.visualization import (
     generate_genotype_by_gender_plot, generate_genotype_diagnosis_gender_plot
 )
 from modules.ui import create_ui
+from modules.diagnosis_trends import analyze_diagnosis_trends, generate_diagnosis_validation_report
 
 # Define the Shiny server
 def server(input, output, session):
@@ -49,6 +50,36 @@ def server(input, output, session):
     diagnostics_gender = reactive.Value([])
     diagnostics_diagnosis_gender = reactive.Value([])
     
+    # New reactive values for diagnosis trends
+    trends_results_data = reactive.Value([])
+    trends_plots_data = reactive.Value([])
+    validation_results_data = reactive.Value([])
+    
+    # Add JavaScript to toggle diagnosis trends options visibility
+    ui.insert_ui(
+        ui.tags.script("""
+        $(document).ready(function() {
+            function updateVisibility() {
+                var selectedTypes = $('input[name="analysis_type"]:checked').map(function() {
+                    return $(this).val();
+                }).get();
+                
+                // Show diagnosis trends options if diagnosis_trends is selected
+                if (selectedTypes.includes('diagnosis_trends')) {
+                    $('#diagnosis_trends_options').show();
+                } else {
+                    $('#diagnosis_trends_options').hide();
+                }
+            }
+            
+            $('input[name="analysis_type"]').on('change', updateVisibility);
+            updateVisibility(); // Initial update
+        });
+        """),
+        selector="head",
+        immediate=True
+    )
+    
     @reactive.Effect
     @reactive.event(input.file1)
     def _():
@@ -60,6 +91,12 @@ def server(input, output, session):
         
         try:
             df = pd.read_excel(file_path)
+            
+            # Clean column names immediately after loading
+            original_cols = list(df.columns)
+            df = clean_column_names(df)
+            cleaned_cols = list(df.columns)
+            
             data.set(df)
             data_cleaned.set(False)
             analysis_run.set(False)
@@ -70,15 +107,28 @@ def server(input, output, session):
             info.append(f"Rows: {len(df)}")
             info.append(f"Columns: {len(df.columns)}")
             
+            # Report on column name cleaning if any were changed
+            cleaned_count = sum(1 for i, col in enumerate(original_cols) if col != cleaned_cols[i])
+            if cleaned_count > 0:
+                info.append(f"\nCleaned {cleaned_count} column names by removing trailing spaces:")
+                for i, (orig, cleaned) in enumerate(zip(original_cols, cleaned_cols)):
+                    if orig != cleaned:
+                        info.append(f"  Column {i}: '{orig}' → '{cleaned}'")
+            
+            # Show column names to help user select date column
+            info.append("\nAvailable columns:")
+            for i, col in enumerate(df.columns):
+                info.append(f"  {i}: {col}")
+            
             # HFE columns
             hfe_columns = find_hfe_columns(df)
             
             if hfe_columns:
-                info.append(f"Found {len(hfe_columns)} HFE mutation columns:")
+                info.append(f"\nFound {len(hfe_columns)} HFE mutation columns:")
                 for col in hfe_columns:
                     info.append(f"- {col}")
             else:
-                info.append("No HFE mutation columns found in the dataset")
+                info.append("\nNo HFE mutation columns found in the dataset")
             
             data_info.set(info)
         except Exception as e:
@@ -136,10 +186,15 @@ def server(input, output, session):
             for i, col in enumerate(df.columns):
                 results.append(f"  {i}: {col}")
             
-            # Run selected analysis
-            analysis_type = input.analysis_type()
+            # Get selected analysis types
+            selected_analysis = input.analysis_type()
             
-            if analysis_type in ["basic", "all"]:
+            # Run selected analyses
+            if not selected_analysis:
+                ui.notification_show("Please select at least one analysis type", type="warning")
+                return
+            
+            if "basic" in selected_analysis:
                 basic_results = analyze_dataset(df)
                 results.extend(basic_results)
                 
@@ -147,15 +202,15 @@ def server(input, output, session):
                 age_results = analyze_age_column(df)
                 results.extend(age_results)
             
-            if analysis_type in ["hh_risk", "all"]:
+            if "hh_risk" in selected_analysis:
                 df, hh_results = analyze_hh_risk(df, hfe_columns)
                 results.extend(hh_results)
             
-            if analysis_type in ["diagnosis", "all"]:
+            if "diagnosis" in selected_analysis:
                 df, diag_results = analyze_diagnosis_associations(df, hfe_columns)
                 results.extend(diag_results)
             
-            if analysis_type in ["hardy_weinberg", "all"]:
+            if "hardy_weinberg" in selected_analysis:
                 # Get selected Hardy-Weinberg tests
                 selected_hwe_tests = input.hwe_tests() if input.hwe_tests() else ["chi_square"]
                 
@@ -164,7 +219,26 @@ def server(input, output, session):
                 results.extend(hwe_results)
                 plots_hardy_weinberg.set(generate_hardy_weinberg_plots(hwe_results_list))
             
-            # Generate plots
+            if "diagnosis_trends" in selected_analysis:
+                # Get column name from user input if auto-detect is disabled
+                selected_date_col = input.date_column() if not input.auto_detect_date() else None
+                
+                # Run analysis with selected column name
+                trends_results, trends_plots = analyze_diagnosis_trends(df, selected_date_col)
+                trends_results_data.set(trends_results)
+                trends_plots_data.set(trends_plots)
+                
+                # Find diagnosis column for validation report
+                diagnoza_col = next((col for col in df.columns 
+                                   if any(term in str(col).lower() for term in 
+                                         ['diagnoza', 'mkch', 'diagnosis', 'icd', 'kod'])), None)
+                
+                if diagnoza_col:
+                    # Generate validation report
+                    validation_results, _ = generate_diagnosis_validation_report(df, diagnoza_col)
+                    validation_results_data.set(validation_results)
+            
+            # Always generate genotype distribution plots
             plots_genotype.set(generate_genotype_distribution_plot(df, hfe_columns))
             
             # Generate new plots for age, gender, and diagnosis-gender relationships
@@ -180,10 +254,10 @@ def server(input, output, session):
             plots_diagnosis_gender.set(diag_gender_plots)
             diagnostics_diagnosis_gender.set(diag_gender_diagnostics)
             
-            if analysis_type in ["hh_risk", "all"]:
+            if "hh_risk" in selected_analysis:
                 plot_risk.set(generate_risk_distribution_plot(df))
             
-            if analysis_type in ["diagnosis", "all"]:
+            if "diagnosis" in selected_analysis:
                 plot_diagnosis.set(generate_diagnosis_association_plot(df))
                 plot_liver.set(generate_liver_disease_plot(df))
             
@@ -373,6 +447,36 @@ def server(input, output, session):
         for mutation, img_str in plots_hardy_weinberg():
             plot_htmls.append(ui.tags.div(
                 ui.tags.h4(mutation),
+                ui.tags.img(src=f"data:image/png;base64,{img_str}", width="100%", style="max-width: 800px;"),
+                ui.br(), ui.br()
+            ))
+        
+        return ui.tags.div(*plot_htmls)
+    
+    @output
+    @render.text
+    def diagnosis_trends_results():
+        if not analysis_run() or not trends_results_data():
+            return "Run Diagnosis Trends Analysis to see results"
+        return "\n".join(trends_results_data())
+    
+    @output
+    @render.text
+    def diagnosis_validation_results():
+        if not analysis_run() or not validation_results_data():
+            return "Run Diagnosis Trends Analysis to see validation results"
+        return "\n".join(validation_results_data())
+    
+    @output
+    @render.ui
+    def diagnosis_trends_plots():
+        if not trends_plots_data():
+            return ui.p("No diagnosis trends plots available. Run diagnosis trends analysis first.")
+        
+        plot_htmls = []
+        for name, img_str in trends_plots_data():
+            plot_htmls.append(ui.tags.div(
+                ui.tags.h4(name),
                 ui.tags.img(src=f"data:image/png;base64,{img_str}", width="100%", style="max-width: 800px;"),
                 ui.br(), ui.br()
             ))
