@@ -244,7 +244,7 @@ def generate_genotype_by_age_plot(df, hfe_columns):
             results.append(f"Created calculated age based on year")
         else:
             # Try to convert to numeric
-            df[age_col] = pd.to_numeric(df[age_col], errors='coerce')
+            df[age_col] = df[age_col].astype(str).str.replace(',', '.').pipe(pd.to_numeric, errors='coerce')
         
         # Check if conversion worked
         if df[age_col].isna().all():
