@@ -5,7 +5,7 @@ A Python Shiny application for analyzing HFE gene mutations in patients and thei
 ## Features
 
 - Data cleaning and preprocessing
-- Basic dataset analysis 
+- Basic dataset analysis
 - HFE mutation distribution visualization
 - Hardy-Weinberg equilibrium analysis
 - Diagnosis association analysis
@@ -35,7 +35,7 @@ The application is organized into the following components:
 2. Create a virtual environment (recommended)
 3. Install dependencies:
 
-```
+``` pip
 pip install -r requirements.txt
 ```
 
@@ -43,7 +43,7 @@ pip install -r requirements.txt
 
 To start the application:
 
-```
+``` python
 python app.py
 ```
 
