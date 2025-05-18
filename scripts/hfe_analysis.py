@@ -224,7 +224,7 @@ def plot_hh_risk(df, output_dir=None):
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Analyze HFE genotypes and hereditary hemochromatosis risk")
-    parser.add_argument("--path", "-p", type=str, default="SSBU25_dataset_modified_new.xlsx",
+    parser.add_argument("--path", "-p", type=str, default="../SSBU25_dataset_modified_new.xlsx",
                         help="Path to the dataset file (default: SSBU25_dataset_modified_new.xlsx)")
     parser.add_argument("--plots", "-g", action="store_true", 
                         help="Generate plots for genotype and risk distributions")

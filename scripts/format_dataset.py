@@ -8,8 +8,8 @@ import re
 from datetime import datetime
 
 # Input and output file paths
-input_file = Path("Info/SSBU25_dataset.xls")
-output_file = Path("SSBU25_dataset_modified_new.xlsx")
+input_file = Path("../Info/SSBU25_dataset.xls")
+output_file = Path("../SSBU25_dataset_modified_new.xlsx")
 
 print(f"Loading dataset from {input_file.absolute()}")
 

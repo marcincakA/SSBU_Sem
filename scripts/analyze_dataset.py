@@ -12,7 +12,7 @@ parser.add_argument("--path", "-p", type=str, help="Path to the dataset file")
 args = parser.parse_args()
 
 # Load the dataset
-default_path = "SSBU25_dataset_modified_new.xlsx"
+default_path = "../SSBU25_dataset_modified_new.xlsx"
 file_path = Path(args.path) if args.path else Path(default_path)
 print(f"Loading dataset from {file_path.absolute()}")
 

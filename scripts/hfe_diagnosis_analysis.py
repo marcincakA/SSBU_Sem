@@ -452,7 +452,7 @@ def plot_diagnosis_associations(df, output_dir=None):
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Analyze associations between HFE mutations and diagnoses")
-    parser.add_argument("--path", "-p", type=str, default="SSBU25_dataset_modified_new.xlsx",
+    parser.add_argument("--path", "-p", type=str, default="../SSBU25_dataset_modified_new.xlsx",
                         help="Path to the dataset file (default: SSBU25_dataset_modified_new.xlsx)")
     parser.add_argument("--plots", "-g", action="store_true", 
                         help="Generate plots for genotype and diagnosis associations")
