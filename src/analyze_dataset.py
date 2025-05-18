@@ -3,7 +3,7 @@
 import pandas as pd
 from pathlib import Path
 
-file_path = Path("../res/SSBU25_dataset_cleaned.xlsx")
+file_path = Path("../res/SSBU25_dataset_samuel.xlsx")
 
 try:
     df = pd.read_excel(file_path)

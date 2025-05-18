@@ -88,5 +88,5 @@ def main():
             plot_distribution(res, args.output)
 
 if __name__ == "__main__":
-    sys.stdout = open("../res/hardy-samuel.txt", "w", encoding="utf-8")
+    sys.stdout = open("../res/logs/hardy-weinberg-samuel.txt", "w", encoding="utf-8")
     main()

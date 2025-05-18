@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 
 import pandas as pd
@@ -30,7 +29,6 @@ def restore_year_prefix(df, id_col, date_col):
         raw_id = str(row[id_col]).strip()
         raw_id = re.sub(r'\.0$', '', raw_id)
         raw_id = raw_id.replace('.0', '')
-
         if re.fullmatch(r'\d{10}', raw_id):
             return raw_id
         if re.fullmatch(r'\d{8}', raw_id) and pd.notna(row[date_col]):
@@ -51,16 +49,14 @@ def fix_id_format(df, id_col, old_format=False):
         val = str(val).strip()
         val = re.sub(r'\.0$', '', val)
         if re.fullmatch(r'\d{10}', val):
-            return val  # already valid
+            return val
         return val.zfill(10 if not old_format else 9)
-
     df[id_col] = df[id_col].apply(clean)
     return df
 
-
 def find_reception_date_column(df):
     for col in df.columns:
-        if "prijem" in col.lower() and "cas" not in col.lower():
+        if "prijem" in col and "cas" not in col:
             return col
     raise ValueError("❌ Nepodarilo sa nájsť stĺpec s dátumom prijatia.")
 
@@ -101,9 +97,15 @@ def save_with_text_column(df, output_path, text_column_index=0):
         for cell in worksheet[col_letter]:
             cell.number_format = numbers.FORMAT_TEXT
 
+def find_column_by_partial(df, keyword):
+    for col in df.columns:
+        if keyword.lower() in col.lower():
+            return col
+    raise ValueError(f"Column with keyword '{keyword}' not found.")
+
 def main():
     df = load_dataset(INPUT_FILE)
-    df.columns = df.columns.str.strip().str.lower()
+    df.columns = df.columns.str.strip()
     id_col = df.columns[0]
 
     df = drop_unwanted_columns(df)
@@ -118,9 +120,17 @@ def main():
     df = fix_id_format(df, id_col, old_format)
     df = reconstruct_missing_ids(df, id_col, date_col, "cas_prijmu")
 
-    required_cols = ["validovany vysledok", "diagnoza mkch-10"] + [col for col in df.columns if "hfe" in col.lower()]
-    df = clean_rows(df, required_cols)
+    # Locate required columns dynamically (case-insensitive)
+    try:
+        validovany_col = find_column_by_partial(df, "validovany")
+        diagnoza_col = find_column_by_partial(df, "mkch")
+        hfe_cols = [col for col in df.columns if "hfe" in col]
+        required_cols = [validovany_col, diagnoza_col] + hfe_cols
+    except ValueError as e:
+        print(f"❌ Error: {e}")
+        return
 
+    df = clean_rows(df, required_cols)
     save_with_text_column(df, OUTPUT_FILE)
     print(f"💾 Cleaned dataset saved to {OUTPUT_FILE.absolute()}")
 
