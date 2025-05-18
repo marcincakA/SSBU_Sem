@@ -1,0 +1,20 @@
+Found columns: ['HFE C187G (H63D)\n[HFE]', 'HFE A193T (S65C)\n[HFE]', 'HFE G845A (C282Y)\n[HFE]']
+
+--- HFE C187G (H63D)
+[HFE] ---
+Observed: {'Normal': np.int64(1214), 'Het': np.int64(420), 'Mut': np.int64(32)}
+Expected: {'Normal': np.float64(1217.1524609843939), 'Het': np.float64(413.69507803121246), 'Mut': np.float64(35.152460984393755)}
+p = 0.8241, In HWE: Yes
+
+--- HFE A193T (S65C)
+[HFE] ---
+Observed: {'Normal': np.int64(1617), 'Het': np.int64(49), 'Mut': np.int64(0)}
+Expected: {'Normal': np.float64(1617.3602941176473), 'Het': np.float64(48.27941176470571), 'Mut': np.float64(0.36029411764705627)}
+p = 0.8306, In HWE: Yes
+
+--- HFE G845A (C282Y)
+[HFE] ---
+Observed: {'Normal': np.int64(1516), 'Het': np.int64(134), 'Mut': np.int64(16)}
+Expected: {'Normal': np.float64(1504.1350540216085), 'Het': np.float64(157.72989195678278), 'Mut': np.float64(4.135054021608648)}
+p = 0.0000, In HWE: No
+
